@@ -92,8 +92,22 @@
 </head>
 
 <body>
+    <audio id="bgMusic" src="./output.mp3" loop
+        style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100;"></audio>
+    <script>
+        // 尝试自动播放，如果被阻止则等待用户交互
+        document.addEventListener('click', function initAudio() {
+            const audio = document.getElementById('bgMusic');
+            audio.play().catch(() => { });
+            document.removeEventListener('click', initAudio);
+        }, { once: true });
 
-    <h2 class="christmas-title">★·.·´圣诞快乐`·.·★</h2>
+        // 尝试立即播放
+        window.addEventListener('load', () => {
+            document.getElementById('bgMusic').play().catch(() => { });
+        });
+    </script>
+    <h2 class="christmas-title">★·.·´𝑴𝒆𝒓𝒓𝒚 𝑪𝒉𝒓𝒊𝒔𝒕𝒎𝒂𝒔`·.·★</h2>
     <canvas id="treeCanvas"></canvas>
     <div class="ui-tip">拖拽旋转 • 滚轮缩放</div>
 
