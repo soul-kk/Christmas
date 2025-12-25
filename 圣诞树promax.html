@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>圣诞快乐！</title>
+    <!-- 引入花体字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+    <style>
+        .christmas-title {
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Great Vibes', cursive;
+            font-size: 48px;
+            color: #fff;
+            text-align: center;
+            z-index: 100;
+            text-shadow:
+                0 0 10px rgba(255, 215, 0, 0.8),
+                0 0 20px rgba(255, 215, 0, 0.6),
+                0 0 40px rgba(255, 100, 100, 0.4),
+                0 0 60px rgba(255, 50, 50, 0.3);
+            animation: titleGlow 2s ease-in-out infinite alternate;
+            letter-spacing: 3px;
+            user-select: none;
+            pointer-events: none;
+            width: 100%;
+        }
+
+        @keyframes titleGlow {
+            0% {
+                text-shadow:
+                    0 0 10px rgba(255, 215, 0, 0.8),
+                    0 0 20px rgba(255, 215, 0, 0.6),
+                    0 0 40px rgba(255, 100, 100, 0.4),
+                    0 0 60px rgba(255, 50, 50, 0.3);
+            }
+
+            100% {
+                text-shadow:
+                    0 0 15px rgba(255, 255, 200, 1),
+                    0 0 30px rgba(255, 215, 0, 0.8),
+                    0 0 50px rgba(255, 100, 100, 0.6),
+                    0 0 80px rgba(255, 50, 50, 0.4);
+            }
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            /* 背景稍微调暗一点，突出主体 */
+            background: radial-gradient(circle at center, #0a1525 0%, #000000 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            font-family: sans-serif;
+        }
+
+        canvas {
+            cursor: grab;
+            /* 提示可拖拽 */
+        }
+
+        canvas:active {
+            cursor: grabbing;
+        }
+
+        .ui-tip {
+            position: absolute;
+            bottom: 20px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+            pointer-events: none;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+            user-select: none;
+        }
+
+        @media (max-width: 700px) {
+            .christmas-title {
+                font-size: 20px;
+            }
+
+            .ui-tip {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2 class="christmas-title">★·.·´圣诞快乐`·.·★</h2>
+    <canvas id="treeCanvas"></canvas>
+    <div class="ui-tip">拖拽旋转 • 滚轮缩放</div>
+
+    <script>
+        const canvas = document.getElementById('treeCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let particles = [];
+        const SNOW_COUNT = 200; // 雪花稍微多点
+        let snow = [];
+
+        // --- 树体配置 ---
+        const TREE_HEIGHT = 550;    // 树冠高度
+        const TREE_BASE_RADIUS = 240; // 树冠底部半径
+        const LEAF_COUNT = 4500;    // 树叶粒子数
+        const LIGHT_COUNT = 250;    // 彩灯数
+
+        // --- 新增：树干配置 ---
+        const TRUNK_HEIGHT = 100;   // 树干高度
+        const TRUNK_RADIUS = 45;    // 树干半径
+        const TRUNK_PARTICLE_COUNT = 800; // 树干粒子数，密集一点显得结实
+
+        // --- 3D 摄像机参数 ---
+        let fov = 800;
+        let angleY = 0;
+        // 初始视角稍微抬高，看向树中心，能更好地看到树干
+        let angleX = -0.15;
+        let zoom = 1.5;
+        let cameraYOffset = 20; // 摄像机垂直偏移，让树在画面中位置更合理
+
+        // --- 初始化 ---
+        function init() {
+            resize();
+            window.addEventListener('resize', resize);
+            createTreeParticles();
+            createSnow();
+            render();
+        }
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+
+        // --- 核心：生成所有粒子 ---
+        function createTreeParticles() {
+            particles = [];
+
+            // 1. 生成绿色针叶 (圆锥体)
+            for (let i = 0; i < LEAF_COUNT; i++) {
+                // y: 从上到下分布. 树冠中心点设为0. 顶部是 -TREE_HEIGHT/2, 底部是 TREE_HEIGHT/2
+                let p = i / LEAF_COUNT;
+                // 使用幂函数让顶部粒子更密集
+                let normalizedY = Math.pow(p, 0.8);
+                let y = -TREE_HEIGHT / 2 + TREE_HEIGHT * normalizedY;
+
+                // 半径：越往下半径越大
+                let hRatio = (y + TREE_HEIGHT / 2) / TREE_HEIGHT; // 0(顶) -> 1(底)
+                let radius = hRatio * TREE_BASE_RADIUS;
+
+                // 角度：黄金角螺旋
+                let angle = i * 2.39996;
+
+                let x = Math.cos(angle) * radius;
+                let z = Math.sin(angle) * radius;
+
+                // 随机扰动，增加自然蓬松感
+                x += (Math.random() - 0.5) * 15;
+                z += (Math.random() - 0.5) * 15;
+                y += (Math.random() - 0.5) * 10;
+
+                particles.push({
+                    x: x, y: y, z: z,
+                    type: 'leaf',
+                    // 深浅不同的绿色
+                    color: Math.random() > 0.6 ? '#1e4f1b' : '#2d6a27',
+                    size: 1.2 + Math.random() * 1.5
+                });
+            }
+
+            // 2. 生成装饰彩灯
+            for (let i = 0; i < LIGHT_COUNT; i++) {
+                let y = -TREE_HEIGHT / 2 + Math.random() * TREE_HEIGHT * 0.95; // 不要在最底下
+                let hRatio = (y + TREE_HEIGHT / 2) / TREE_HEIGHT;
+                let radius = hRatio * TREE_BASE_RADIUS + 8; // 稍微突出
+
+                let angle = Math.random() * Math.PI * 2;
+                let x = Math.cos(angle) * radius;
+                let z = Math.sin(angle) * radius;
+
+                const colors = ['#ff1111', '#ffcc00', '#00ddff', '#ff3399'];
+                let color = colors[Math.floor(Math.random() * colors.length)];
+
+                particles.push({
+                    x: x, y: y, z: z,
+                    type: 'light',
+                    color: color,
+                    baseSize: 3.5,
+                    blinkOffset: Math.random() * 100
+                });
+            }
+
+            // 3. 树顶星星
+            particles.push({
+                x: 0, y: -TREE_HEIGHT / 2 - 15, z: 0,
+                type: 'star',
+                color: '#ffe970',
+                size: 14
+            });
+
+            // --- 新增：4. 生成树干 (圆柱体) ---
+            for (let i = 0; i < TRUNK_PARTICLE_COUNT; i++) {
+                let hRatio = i / TRUNK_PARTICLE_COUNT; // 0 到 1
+                // y 从树冠底部开始，向下延伸 TRUNK_HEIGHT
+                let y = (TREE_HEIGHT / 2) + hRatio * TRUNK_HEIGHT;
+
+                // 围绕中心随机分布在圆柱表面
+                let angle = Math.random() * Math.PI * 2;
+                // 半径稍微随机一点，模拟树皮粗糙感
+                let r = TRUNK_RADIUS + (Math.random() - 0.5) * 8;
+
+                let x = Math.cos(angle) * r;
+                let z = Math.sin(angle) * r;
+
+                particles.push({
+                    x: x, y: y, z: z,
+                    type: 'trunk', // 新类型
+                    // 几种棕色模拟纹理
+                    color: Math.random() > 0.5 ? '#5d4037' : '#4e342e',
+                    // 树干粒子稍微大一点，显得敦实
+                    size: 2.5 + Math.random()
+                });
+            }
+        }
+
+        // --- 创建雪花 ---
+        function createSnow() {
+            snow = [];
+            for (let i = 0; i < SNOW_COUNT; i++) {
+                snow.push({
+                    x: (Math.random() - 0.5) * width * 2,
+                    y: (Math.random() - 0.5) * height * 2,
+                    z: (Math.random() - 0.5) * 1500, // 深度分布更广
+                    speedY: 1.5 + Math.random() * 2.5,
+                    speedX: (Math.random() - 0.5) * 1, // 横向飘动
+                    size: 1 + Math.random() * 3
+                });
+            }
+        }
+
+
+        // --- 渲染循环 ---
+        function render() {
+            ctx.clearRect(0, 0, width, height);
+
+            // 自动缓慢旋转
+            if (!isDragging) {
+                angleY += 0.002;
+            }
+
+            const cx = width / 2;
+            const cy = height / 2 + cameraYOffset; // 应用垂直偏移
+
+            let renderList = [];
+
+            // 1. 3D 投影与变换
+            particles.forEach(p => {
+                // 绕Y轴旋转
+                let x1 = p.x * Math.cos(angleY) - p.z * Math.sin(angleY);
+                let z1 = p.z * Math.cos(angleY) + p.x * Math.sin(angleY);
+
+                // 绕X轴旋转 (俯仰)
+                let y2 = p.y * Math.cos(angleX) - z1 * Math.sin(angleX);
+                let z2 = z1 * Math.cos(angleX) + p.y * Math.sin(angleX);
+
+                // 透视投影
+                let zFinal = z2 + 1200; // 推远一点
+                let scale = fov / (fov + zFinal) * zoom;
+
+                if (scale > 0) {
+                    renderList.push({
+                        x: cx + x1 * scale,
+                        y: cy + y2 * scale,
+                        scale: scale,
+                        z: z2, // 用于排序深度
+                        p: p
+                    });
+                }
+            });
+
+            // 2. 深度排序 (关键!)
+            renderList.sort((a, b) => b.z - a.z);
+
+            // 3. 绘制
+            renderList.forEach(item => {
+                const { p, x, y, scale } = item;
+                ctx.beginPath();
+
+                // 合并树叶和树干的绘制逻辑，因为它们都是简单的实心圆点
+                if (p.type === 'leaf' || p.type === 'trunk') {
+                    ctx.fillStyle = p.color;
+                    // 透明度控制：树干稍微实心一点(0.7)，树叶更有空气感(0.3)
+                    let baseAlpha = p.type === 'trunk' ? 0.7 : 0.3;
+                    // 距离越近越不透明
+                    ctx.globalAlpha = Math.min(1, scale * 0.5 + baseAlpha);
+                    ctx.arc(x, y, p.size * scale, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                else if (p.type === 'light') {
+                    // 灯光绘制 (带闪烁和光晕)
+                    let blink = Math.sin(Date.now() / 250 + p.blinkOffset); // 闪烁速度
+                    let currentSize = p.baseSize * scale * (1 + blink * 0.3); // 大小随闪烁变化
+
+                    // 光晕渐变
+                    let gradient = ctx.createRadialGradient(x, y, 0, x, y, currentSize * 4);
+                    gradient.addColorStop(0, p.color);
+                    gradient.addColorStop(0.4, p.color + '66'); // 半透明
+                    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+
+                    ctx.fillStyle = gradient;
+                    ctx.globalAlpha = 0.9 + blink * 0.1;
+                    ctx.arc(x, y, currentSize * 4, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 高亮中心点
+                    ctx.beginPath();
+                    ctx.fillStyle = '#fff';
+                    ctx.globalAlpha = 0.8 + blink * 0.2;
+                    ctx.arc(x, y, currentSize * 0.6, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                else if (p.type === 'star') {
+                    // 树顶星绘制
+                    ctx.fillStyle = p.color;
+                    ctx.shadowBlur = 30 * scale;
+                    ctx.shadowColor = p.color;
+                    ctx.globalAlpha = 1;
+
+                    // 中心圆
+                    ctx.arc(x, y, p.size * scale, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 十字光芒
+                    ctx.shadowBlur = 0;
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2.5 * scale;
+                    ctx.beginPath();
+                    let flareLen = 25 * scale;
+                    ctx.moveTo(x - flareLen, y); ctx.lineTo(x + flareLen, y);
+                    ctx.moveTo(x, y - flareLen); ctx.lineTo(x, y + flareLen);
+                    ctx.stroke();
+                }
+            });
+
+            // 4. 绘制前景雪花
+            ctx.globalAlpha = 0.7;
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = '#ffffff';
+            snow.forEach(s => {
+                s.y += s.speedY;
+                s.x += s.speedX; // 横向飘动
+                // 循环
+                if (s.y > height + 50) s.y = -50;
+                if (s.x > width + 50) s.x = -50;
+                if (s.x < -50) s.x = width + 50;
+
+                // 简单的视差效果：越远的雪花移动越慢，也越小
+                let snowScale = fov / (fov + s.z);
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.size * snowScale, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            // 重置 shadow
+            ctx.shadowBlur = 0;
+
+            requestAnimationFrame(render);
+        }
+
+        // --- 交互控制 (保持不变) ---
+        let isDragging = false;
+        let lastX = 0; let lastY = 0;
+
+        canvas.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+        document.addEventListener('mouseup', () => isDragging = false);
+        document.addEventListener('mousemove', e => {
+            if (!isDragging) return;
+            let dx = e.clientX - lastX; let dy = e.clientY - lastY;
+            angleY += dx * 0.005;
+            angleX -= dy * 0.005;
+            angleX = Math.max(-0.6, Math.min(0.3, angleX)); // 调整了俯仰角限制
+            lastX = e.clientX; lastY = e.clientY;
+        });
+        canvas.addEventListener('wheel', e => {
+            zoom += e.deltaY * -0.001;
+            zoom = Math.max(0.5, Math.min(2.5, zoom));
+        }, { passive: true });
+
+        // 移动端适配
+        canvas.addEventListener('touchstart', e => { isDragging = true; lastX = e.touches[0].clientX; lastY = e.touches[0].clientY; }, { passive: false });
+        document.addEventListener('touchend', () => isDragging = false);
+        document.addEventListener('touchmove', e => {
+            if (!isDragging) return;
+            e.preventDefault();
+            let dx = e.touches[0].clientX - lastX; let dy = e.touches[0].clientY - lastY;
+            angleY += dx * 0.008; angleX -= dy * 0.008;
+            lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+        }, { passive: false });
+
+        init();
+
+    </script>
+</body>
+
+</html>
